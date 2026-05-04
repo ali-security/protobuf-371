@@ -1,0 +1,47 @@
+name: Build protobuf-java
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  maven:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # java/pom.xml expects a protoc binary at ${repo}/src/protoc (see <protoc> property).
+      - name: Install protoc 3.7.1
+        run: |
+          mkdir -p src
+          curl -sSL -o /tmp/protoc.zip \
+            https://github.com/protocolbuffers/protobuf/releases/download/v3.7.1/protoc-3.7.1-linux-x86_64.zip
+          unzip -q /tmp/protoc.zip -d /tmp/protoc
+          cp /tmp/protoc/bin/protoc src/protoc
+          chmod +x src/protoc
+          src/protoc --version
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+          cache: maven
+
+      # Runner images do not always ship Maven; keep the build self-contained.
+      - name: Install Maven
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y maven
+
+      # Runs the full default lifecycle through verify: all Surefire tests in
+      # protobuf-java (core) and protobuf-java-util. There is no separate
+      # integration-test (Failsafe) phase in these POMs. The v2.5.0
+      # compatibility_tests/ tree is driven by test.sh (custom Maven repo path,
+      # clones old protobuf tags, legacy protoc download URLs) and is not wired
+      # here; run that script locally if you need those scenarios.
+      - name: Maven clean verify (all module tests)
+        working-directory: java
+        run: mvn -B -ntp clean verify --fail-at-end -Dsurefire.useFile=false
