@@ -378,5 +378,14 @@ public class UnknownFieldSetTest extends TestCase {
     assertEquals(set.hashCode(), copy.hashCode());
   }
 
+  public void testAsMap() throws Exception {
+    UnknownFieldSet.Builder builder = UnknownFieldSet.newBuilder().mergeFrom(unknownFields);
+    Map<Integer, UnknownFieldSet.Field> mapFromBuilder = builder.asMap();
+    assertTrue(mapFromBuilder.size() > 0);
+    UnknownFieldSet fields = builder.build();
+    Map<Integer, UnknownFieldSet.Field> mapFromFieldSet = fields.asMap();
+    assertEquals(mapFromFieldSet, mapFromBuilder);
+  }
+
   // =================================================================
 }
