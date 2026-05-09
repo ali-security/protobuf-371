@@ -8,42 +8,135 @@ on:
   workflow_dispatch:
 
 jobs:
-  maven:
+  docker:
     runs-on: ubuntu-latest
+    env:
+      BUILD_OUTPUT_PATH: ${{ github.workspace }}/build_output
     steps:
       - uses: actions/checkout@v4
 
-      # java/pom.xml expects a protoc binary at ${repo}/src/protoc (see <protoc> property).
-      - name: Install protoc 3.7.1
+      - name: Build Docker image
         run: |
-          mkdir -p src
-          curl -sSL -o /tmp/protoc.zip \
-            https://github.com/protocolbuffers/protobuf/releases/download/v3.7.1/protoc-3.7.1-linux-x86_64.zip
-          unzip -q /tmp/protoc.zip -d /tmp/protoc
-          cp /tmp/protoc/bin/protoc src/protoc
-          chmod +x src/protoc
+          cat > /tmp/protobuf-java-build.Dockerfile <<'DOCKERFILE'
+          # Build protobuf-java (core) for patched v3.7.1.
+          #
+          # The CVE-2022-3171 backport changes the Java generator under
+          # src/google/protobuf/compiler/java, so the artifact must be built with
+          # a protoc binary compiled from these patched sources.
+          # We use JDK 8 because modern Maven requires it, while java/pom.xml
+          # controls the emitted bytecode level (source/target 1.7).
+          FROM maven:3.8.6-openjdk-8
+
+          ENV SRC_PATH=/src
+          ENV BUILD_OUTPUT_PATH=/build_output
+
+          RUN apt-get update && \
+              DEBIAN_FRONTEND=noninteractive apt-get install -y \
+                autoconf \
+                automake \
+                build-essential \
+                ca-certificates \
+                curl \
+                libtool \
+                pkg-config \
+                zlib1g-dev && \
+              rm -rf /var/lib/apt/lists/*
+
+          RUN mkdir -p ${BUILD_OUTPUT_PATH}
+
+          WORKDIR ${SRC_PATH}
+
+          RUN cat <<'EOF' > /run.sh
+          #!/bin/bash
+          set -euo pipefail
+          echo "=== Starting build ==="
+          cd ${SRC_PATH}
+
+          echo "=== Building patched protoc from source ==="
+          ./autogen.sh
+          ./configure --disable-shared
+          make -j"$(nproc)"
           src/protoc --version
 
-      # POM compiles to 1.7 bytecode; several tests (e.g. ExtensionRegistryFactoryTest)
-      # cast the test ClassLoader to URLClassLoader, which only holds on JDK 8 and below.
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 8
-          cache: maven
+          echo "=== Running Maven reactor tests with POM-defined Java bytecode target ==="
+          cd java
 
-      # Runner images do not always ship Maven; keep the build self-contained.
-      - name: Install Maven
+          # The POM supplies source/target compatibility and the default
+          # ${protobuf.source.dir}/protoc path.
+          mvn -B --no-transfer-progress test -Dsurefire.useFile=false
+
+          echo "=== Building Maven package ==="
+          mvn -B --no-transfer-progress package -Dsurefire.useFile=false
+
+          CORE_JAR="$(find core/target/ -maxdepth 1 -name "protobuf-java-*.jar" \
+            -not -name "*-sources.jar" \
+            -not -name "*-javadoc.jar" \
+            -not -name "*-tests.jar" \
+            -print -quit)"
+
+          echo "=== Verifying Java 7 bytecode ==="
+          jar tf "${CORE_JAR}" | grep '\.class$' | while read -r class_file; do
+            class_name="${class_file%.class}"
+            major_version="$(javap -verbose -classpath "${CORE_JAR}" "${class_name}" \
+              | awk '/major version:/ {print $3; exit}')"
+            if [ "${major_version}" -gt 51 ]; then
+              echo "${class_file} has classfile major version ${major_version}, expected <= 51"
+              exit 1
+            fi
+          done
+
+          echo "=== Verifying Java 7 API compatibility with Animal Sniffer ==="
+          cat > /tmp/animal-sniffer-pom.xml <<'POM'
+          <project xmlns="http://maven.apache.org/POM/4.0.0"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>seal.verify</groupId>
+            <artifactId>protobuf-java7-api-check</artifactId>
+            <version>1</version>
+            <build>
+              <outputDirectory>/src/java/core/target/classes</outputDirectory>
+              <plugins>
+                <plugin>
+                  <groupId>org.codehaus.mojo</groupId>
+                  <artifactId>animal-sniffer-maven-plugin</artifactId>
+                  <version>1.16</version>
+                  <configuration>
+                    <signature>
+                      <groupId>org.codehaus.mojo.signature</groupId>
+                      <artifactId>java17</artifactId>
+                      <version>1.0</version>
+                    </signature>
+                    <ignores>
+                      <ignore>sun.misc.*</ignore>
+                    </ignores>
+                  </configuration>
+                </plugin>
+              </plugins>
+            </build>
+          </project>
+          POM
+          mvn -B --no-transfer-progress -f /tmp/animal-sniffer-pom.xml \
+            org.codehaus.mojo:animal-sniffer-maven-plugin:1.16:check
+
+          echo "=== Copying core JAR ==="
+          cp "${CORE_JAR}" ${BUILD_OUTPUT_PATH}/
+          echo "=== Build complete ==="
+          ls -lh ${BUILD_OUTPUT_PATH}/
+          EOF
+
+          RUN chmod +x /run.sh
+
+          ENTRYPOINT ["/run.sh"]
+          DOCKERFILE
+
+          sed -i 's/^          //' /tmp/protobuf-java-build.Dockerfile
+          docker build -t protobuf-java-371-sp1-build -f /tmp/protobuf-java-build.Dockerfile /tmp
+
+      - name: Run Docker build
         run: |
-          sudo apt-get update
-          sudo apt-get install -y maven
-
-      # Runs the full default lifecycle through verify: all Surefire tests in
-      # protobuf-java (core) and protobuf-java-util. There is no separate
-      # integration-test (Failsafe) phase in these POMs. The v2.5.0
-      # compatibility_tests/ tree is driven by test.sh (custom Maven repo path,
-      # clones old protobuf tags, legacy protoc download URLs) and is not wired
-      # here; run that script locally if you need those scenarios.
-      - name: Maven clean verify (all module tests)
-        working-directory: java
-        run: mvn -B -ntp clean verify --fail-at-end -Dsurefire.useFile=false
+          mkdir -p "${BUILD_OUTPUT_PATH}"
+          docker run --rm \
+            -v "${{ github.workspace }}:/src" \
+            -v "${BUILD_OUTPUT_PATH}:/build_output" \
+            protobuf-java-371-sp1-build
