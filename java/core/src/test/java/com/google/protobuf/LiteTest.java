@@ -48,6 +48,7 @@ import com.google.protobuf.UnittestLite.TestAllTypesLite.RepeatedGroup;
 import com.google.protobuf.UnittestLite.TestAllTypesLiteOrBuilder;
 import com.google.protobuf.UnittestLite.TestHugeFieldNumbersLite;
 import com.google.protobuf.UnittestLite.TestNestedExtensionLite;
+import map_lite_test.MapTestProto.MapContainer;
 import map_lite_test.MapTestProto.TestMap;
 import map_lite_test.MapTestProto.TestMap.MessageValue;
 import protobuf_unittest.lite_equals_and_hash.LiteEqualsAndHash.Bar;
@@ -65,6 +66,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import junit.framework.TestCase;
 
 /**
@@ -73,6 +75,8 @@ import junit.framework.TestCase;
  * @author kenton@google.com Kenton Varda
  */
 public class LiteTest extends TestCase {
+  private static final byte[] DEEPLY_NESTED_UNKNOWN_GROUPS = makeNestedUnknownGroups(101);
+
   @Override
   public void setUp() throws Exception {
     // Test that nested extensions are initialized correctly even if the outer
@@ -2421,6 +2425,178 @@ public class LiteTest extends TestCase {
         contains(serializedMessage, expectedBytes));
   }
 
+  public void testLiteUnknownGroupRecursionLimit() throws Exception {
+    try {
+      TestAllTypesLite.parseFrom(DEEPLY_NESTED_UNKNOWN_GROUPS);
+      fail("Should have thrown an exception.");
+    } catch (InvalidProtocolBufferException e) {
+      assertEquals(
+          InvalidProtocolBufferException.recursionLimitExceeded().getMessage(), e.getMessage());
+    }
+
+    CodedInputStream input = CodedInputStream.newInstance(DEEPLY_NESTED_UNKNOWN_GROUPS);
+    input.setRecursionLimit(8);
+    try {
+      TestAllTypesLite.parseFrom(input);
+      fail("Should have thrown an exception.");
+    } catch (InvalidProtocolBufferException e) {
+      assertEquals(
+          InvalidProtocolBufferException.recursionLimitExceeded().getMessage(), e.getMessage());
+    }
+  }
+
+  public void testParseFromInputStream_nestingUnknownGroups() throws Exception {
+    ByteString byteString = generateNestingGroups(99);
+    try {
+      TestAllTypesLite.parseFrom(byteString);
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertFalse(e.getMessage().contains("Protocol message had too many levels of nesting"));
+    }
+  }
+
+  public void testParseFromInputStream_nestingUnknownGroups_exception() throws Exception {
+    ByteString byteString = generateNestingGroups(101);
+    try {
+      TestAllTypesLite.parseFrom(byteString);
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertEquals(
+          InvalidProtocolBufferException.recursionLimitExceeded().getMessage(), e.getMessage());
+    }
+  }
+
+  public void testParseFromBytes_nestingUnknownGroups() throws Exception {
+    ByteString byteString = generateNestingGroups(99);
+    try {
+      TestAllTypesLite.parseFrom(byteString.toByteArray());
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertFalse(e.getMessage().contains("Protocol message had too many levels of nesting"));
+    }
+  }
+
+  public void testParseFromBytes_nestingUnknownGroups_exception() throws Exception {
+    ByteString byteString = generateNestingGroups(101);
+    try {
+      TestAllTypesLite.parseFrom(byteString.toByteArray());
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertEquals(
+          InvalidProtocolBufferException.recursionLimitExceeded().getMessage(), e.getMessage());
+    }
+  }
+
+  public void testParseFromInputStream_concurrent_nestingUnknownGroups() throws Exception {
+    int numThreads = 200;
+    ArrayList<Thread> threads = new ArrayList<Thread>();
+    final ByteString byteString = generateNestingGroups(99);
+    final AtomicBoolean thrown = new AtomicBoolean(false);
+    for (int i = 0; i < numThreads; i++) {
+      Thread thread =
+          new Thread(
+              new Runnable() {
+                @Override
+                public void run() {
+                  try {
+                    TestAllTypesLite.parseFrom(byteString);
+                  } catch (IOException e) {
+                    if (e.getMessage() != null
+                        && e.getMessage()
+                            .contains("Protocol message had too many levels of nesting")) {
+                      thrown.set(true);
+                    }
+                  }
+                }
+              });
+      thread.start();
+      threads.add(thread);
+    }
+    for (Thread thread : threads) {
+      thread.join();
+    }
+    assertFalse(thrown.get());
+  }
+
+  public void testParseFromBytes_concurrent_nestingUnknownGroups() throws Exception {
+    int numThreads = 200;
+    ArrayList<Thread> threads = new ArrayList<Thread>();
+    final ByteString byteString = generateNestingGroups(99);
+    final AtomicBoolean thrown = new AtomicBoolean(false);
+    for (int i = 0; i < numThreads; i++) {
+      Thread thread =
+          new Thread(
+              new Runnable() {
+                @Override
+                public void run() {
+                  try {
+                    TestAllTypesLite.parseFrom(byteString.toByteArray());
+                  } catch (InvalidProtocolBufferException e) {
+                    if (e.getMessage() != null
+                        && e.getMessage()
+                            .contains("Protocol message had too many levels of nesting")) {
+                      thrown.set(true);
+                    }
+                  }
+                }
+              });
+      thread.start();
+      threads.add(thread);
+    }
+    for (Thread thread : threads) {
+      thread.join();
+    }
+    assertFalse(thrown.get());
+  }
+
+  public void testMaliciousSGroupTagsWithMapField_fromByteArray() throws Exception {
+    ByteString byteString = generateNestingGroups(102);
+    try {
+      MapContainer.parseFrom(byteString.toByteArray());
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertTrue(e.getMessage().contains("Protocol message had too many levels of nesting"));
+    }
+    try {
+      MapContainer.newBuilder().mergeFrom(byteString.toByteArray());
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertTrue(e.getMessage().contains("Protocol message had too many levels of nesting"));
+    }
+  }
+
+  public void testMaliciousSGroupTagsWithMapField_fromByteString() throws Exception {
+    ByteString byteString = generateNestingGroups(102);
+    try {
+      MapContainer.parseFrom(byteString);
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertTrue(e.getMessage().contains("Protocol message had too many levels of nesting"));
+    }
+    try {
+      MapContainer.newBuilder().mergeFrom(byteString);
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertTrue(e.getMessage().contains("Protocol message had too many levels of nesting"));
+    }
+  }
+
+  public void testMaliciousSGroupTagsWithMapField_fromInputStream() throws Exception {
+    byte[] bytes = generateNestingGroups(101).toByteArray();
+    try {
+      MapContainer.parseFrom(new ByteArrayInputStream(bytes));
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertTrue(e.getMessage().contains("Protocol message had too many levels of nesting"));
+    }
+    try {
+      MapContainer.newBuilder().mergeFrom(new ByteArrayInputStream(bytes));
+      fail("Should have thrown an exception!");
+    } catch (InvalidProtocolBufferException e) {
+      assertTrue(e.getMessage().contains("Protocol message had too many levels of nesting"));
+    }
+  }
+
   private String encodeHex(ByteString bytes) {
     String hexDigits = "0123456789abcdef";
     StringBuilder stringBuilder = new StringBuilder(bytes.size() * 2);
@@ -2438,5 +2614,22 @@ public class LiteTest extends TestCase {
       }
     }
     return false;
+  }
+
+  private static byte[] makeNestedUnknownGroups(int depth) {
+    byte[] data = new byte[depth];
+    Arrays.fill(data, (byte) WireFormat.makeTag(1, WireFormat.WIRETYPE_START_GROUP));
+    return data;
+  }
+
+  private static ByteString generateNestingGroups(int num) throws IOException {
+    int groupTap = WireFormat.makeTag(3, WireFormat.WIRETYPE_START_GROUP);
+    ByteString.Output byteStringOutput = ByteString.newOutput();
+    CodedOutputStream codedOutput = CodedOutputStream.newInstance(byteStringOutput);
+    for (int i = 0; i < num; i++) {
+      codedOutput.writeInt32NoTag(groupTap);
+    }
+    codedOutput.flush();
+    return byteStringOutput.toByteString();
   }
 }
