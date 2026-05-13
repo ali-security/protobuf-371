@@ -335,6 +335,27 @@ GenerateParsingCode(io::Printer* printer) const {
 }
 
 void ImmutableEnumFieldGenerator::
+GenerateBuilderParsingCode(io::Printer* printer) const {
+  if (SupportUnknownEnumValue(descriptor_->file())) {
+    printer->Print(variables_,
+      "int rawValue = input.readEnum();\n"
+      "$set_has_field_bit_builder$\n"
+      "$name$_ = rawValue;\n");
+  } else {
+    printer->Print(variables_,
+      "int rawValue = input.readEnum();\n"
+      "@SuppressWarnings(\"deprecation\")\n"
+      "$type$ value = $type$.$for_number$(rawValue);\n"
+      "if (value == null) {\n"
+      "  mergeUnknownVarintField($number$, rawValue);\n"
+      "} else {\n"
+      "  $set_has_field_bit_builder$\n"
+      "  $name$_ = rawValue;\n"
+      "}\n");
+  }
+}
+
+void ImmutableEnumFieldGenerator::
 GenerateParsingDoneCode(io::Printer* printer) const {
   // noop for enums
 }
@@ -527,6 +548,27 @@ GenerateParsingCode(io::Printer* printer) const {
       "$type$ value = $type$.$for_number$(rawValue);\n"
       "if (value == null) {\n"
       "  unknownFields.mergeVarintField($number$, rawValue);\n"
+      "} else {\n"
+      "  $set_oneof_case_message$;\n"
+      "  $oneof_name$_ = rawValue;\n"
+      "}\n");
+  }
+}
+
+void ImmutableEnumOneofFieldGenerator::
+GenerateBuilderParsingCode(io::Printer* printer) const {
+  if (SupportUnknownEnumValue(descriptor_->file())) {
+    printer->Print(variables_,
+      "int rawValue = input.readEnum();\n"
+      "$set_oneof_case_message$;\n"
+      "$oneof_name$_ = rawValue;\n");
+  } else {
+    printer->Print(variables_,
+      "int rawValue = input.readEnum();\n"
+      "@SuppressWarnings(\"deprecation\")\n"
+      "$type$ value = $type$.$for_number$(rawValue);\n"
+      "if (value == null) {\n"
+      "  mergeUnknownVarintField($number$, rawValue);\n"
       "} else {\n"
       "  $set_oneof_case_message$;\n"
       "  $oneof_name$_ = rawValue;\n"
@@ -901,6 +943,27 @@ GenerateParsingCode(io::Printer* printer) const {
 }
 
 void RepeatedImmutableEnumFieldGenerator::
+GenerateBuilderParsingCode(io::Printer* printer) const {
+  if (SupportUnknownEnumValue(descriptor_->file())) {
+    printer->Print(variables_,
+      "int rawValue = input.readEnum();\n"
+      "ensure$capitalized_name$IsMutable();\n"
+      "$name$_.add(rawValue);\n");
+  } else {
+    printer->Print(variables_,
+      "int rawValue = input.readEnum();\n"
+      "@SuppressWarnings(\"deprecation\")\n"
+      "$type$ value = $type$.$for_number$(rawValue);\n"
+      "if (value == null) {\n"
+      "  mergeUnknownVarintField($number$, rawValue);\n"
+      "} else {\n"
+      "  ensure$capitalized_name$IsMutable();\n"
+      "  $name$_.add(rawValue);\n"
+      "}\n");
+  }
+}
+
+void RepeatedImmutableEnumFieldGenerator::
 GenerateParsingCodeFromPacked(io::Printer* printer) const {
   // Wrap GenerateParsingCode's contents with a while loop.
 
@@ -914,6 +977,20 @@ GenerateParsingCodeFromPacked(io::Printer* printer) const {
 
   printer->Outdent();
   printer->Print(variables_,
+    "}\n"
+    "input.popLimit(oldLimit);\n");
+}
+
+void RepeatedImmutableEnumFieldGenerator::
+GenerateBuilderParsingCodeFromPacked(io::Printer* printer) const {
+  printer->Print(variables_,
+    "int length = input.readRawVarint32();\n"
+    "int oldLimit = input.pushLimit(length);\n"
+    "while (input.getBytesUntilLimit() > 0) {\n");
+  printer->Indent();
+  GenerateBuilderParsingCode(printer);
+  printer->Outdent();
+  printer->Print(
     "}\n"
     "input.popLimit(oldLimit);\n");
 }

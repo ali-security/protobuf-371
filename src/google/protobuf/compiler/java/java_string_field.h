@@ -75,6 +75,7 @@ class ImmutableStringFieldGenerator : public ImmutableFieldGenerator {
   void GenerateMergingCode(io::Printer* printer) const;
   void GenerateBuildingCode(io::Printer* printer) const;
   void GenerateParsingCode(io::Printer* printer) const;
+  void GenerateBuilderParsingCode(io::Printer* printer) const;
   void GenerateParsingDoneCode(io::Printer* printer) const;
   void GenerateSerializationCode(io::Printer* printer) const;
   void GenerateSerializedSizeCode(io::Printer* printer) const;
@@ -110,6 +111,7 @@ class ImmutableStringOneofFieldGenerator
   void GenerateMergingCode(io::Printer* printer) const;
   void GenerateBuildingCode(io::Printer* printer) const;
   void GenerateParsingCode(io::Printer* printer) const;
+  void GenerateBuilderParsingCode(io::Printer* printer) const;
   void GenerateSerializationCode(io::Printer* printer) const;
   void GenerateSerializedSizeCode(io::Printer* printer) const;
 
@@ -134,6 +136,7 @@ class RepeatedImmutableStringFieldGenerator : public ImmutableFieldGenerator {
   void GenerateMergingCode(io::Printer* printer) const;
   void GenerateBuildingCode(io::Printer* printer) const;
   void GenerateParsingCode(io::Printer* printer) const;
+  void GenerateBuilderParsingCode(io::Printer* printer) const;
   void GenerateParsingDoneCode(io::Printer* printer) const;
   void GenerateSerializationCode(io::Printer* printer) const;
   void GenerateSerializedSizeCode(io::Printer* printer) const;

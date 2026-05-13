@@ -510,6 +510,9 @@ public abstract class GeneratedMessageLite<
       }
       return (BuilderType) this;
     }
+
+    protected final void onChanged() {
+    }
   }
 
 

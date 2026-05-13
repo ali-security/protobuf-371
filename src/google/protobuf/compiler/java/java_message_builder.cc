@@ -59,6 +59,8 @@ namespace google {
 namespace protobuf {
 namespace compiler {
 namespace java {
+using internal::WireFormat;
+using internal::WireFormatLite;
 
 namespace {
 bool GenerateHasBits(const Descriptor* descriptor) {

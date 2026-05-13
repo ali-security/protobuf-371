@@ -737,6 +737,34 @@ GenerateParsingCode(io::Printer* printer) const {
 }
 
 void ImmutableMapFieldGenerator::
+GenerateBuilderParsingCode(io::Printer* printer) const {
+  if (!SupportUnknownEnumValue(descriptor_->file()) &&
+      GetJavaType(ValueField(descriptor_)) == JAVATYPE_ENUM) {
+    printer->Print(
+        variables_,
+        "com.google.protobuf.ByteString bytes = input.readBytes();\n"
+        "com.google.protobuf.MapEntry<$type_parameters$>\n"
+        "$name$__ = $default_entry$.getParserForType().parseFrom(bytes);\n");
+    printer->Print(
+        variables_,
+        "if ($value_enum_type$.forNumber($name$__.getValue()) == null) {\n"
+        "  getUnknownFieldSetBuilder().mergeLengthDelimitedField($number$, bytes);\n"
+        "} else {\n"
+        "  internalGetMutable$capitalized_name$().getMutableMap().put(\n"
+        "      $name$__.getKey(), $name$__.getValue());\n"
+        "}\n");
+  } else {
+    printer->Print(
+        variables_,
+        "com.google.protobuf.MapEntry<$type_parameters$>\n"
+        "$name$__ = input.readMessage(\n"
+        "    $default_entry$.getParserForType(), extensionRegistry);\n"
+        "internalGetMutable$capitalized_name$().getMutableMap().put(\n"
+        "    $name$__.getKey(), $name$__.getValue());\n");
+  }
+}
+
+void ImmutableMapFieldGenerator::
 GenerateParsingDoneCode(io::Printer* printer) const {
   // Nothing to do here.
 }

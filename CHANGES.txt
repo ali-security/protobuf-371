@@ -1,3 +1,14 @@
+2019-01-24 version 3.7.1 (C++/Java/Python/PHP/Objective-C/C#/Ruby/JavaScript)
+
+  Java
+  * Fix TextFormat parser to build up recurring (but supposedly not repeated)
+    sub-messages directly from text rather than building a new sub-message and
+    merging the fully formed message into the existing field. This addresses
+    CVE-2022-3509, a potential denial of service issue where inputs containing
+    multiple instances of non-repeated embedded messages with repeated or
+    unknown fields causes objects to be converted back-n-forth between mutable
+    and immutable forms, resulting in potentially long garbage collection pauses.
+
 2019-01-24 version 3.7.0 (C++/Java/Python/PHP/Objective-C/C#/Ruby/JavaScript)
 
   C++

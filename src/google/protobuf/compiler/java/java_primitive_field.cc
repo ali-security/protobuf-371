@@ -358,6 +358,13 @@ GenerateParsingCode(io::Printer* printer) const {
 }
 
 void ImmutablePrimitiveFieldGenerator::
+GenerateBuilderParsingCode(io::Printer* printer) const {
+  printer->Print(variables_,
+    "$set_has_field_bit_builder$\n"
+    "$name$_ = input.read$capitalized_type$();\n");
+}
+
+void ImmutablePrimitiveFieldGenerator::
 GenerateParsingDoneCode(io::Printer* printer) const {
   // noop for primitives.
 }
@@ -573,6 +580,13 @@ GenerateMergingCode(io::Printer* printer) const {
 
 void ImmutablePrimitiveOneofFieldGenerator::
 GenerateParsingCode(io::Printer* printer) const {
+  printer->Print(variables_,
+    "$set_oneof_case_message$;\n"
+    "$oneof_name$_ = input.read$capitalized_type$();\n");
+}
+
+void ImmutablePrimitiveOneofFieldGenerator::
+GenerateBuilderParsingCode(io::Printer* printer) const {
   printer->Print(variables_,
     "$set_oneof_case_message$;\n"
     "$oneof_name$_ = input.read$capitalized_type$();\n");
@@ -835,6 +849,13 @@ GenerateParsingCode(io::Printer* printer) const {
 }
 
 void RepeatedImmutablePrimitiveFieldGenerator::
+GenerateBuilderParsingCode(io::Printer* printer) const {
+  printer->Print(variables_,
+    "ensure$capitalized_name$IsMutable();\n"
+    "$repeated_add$(input.read$capitalized_type$());\n");
+}
+
+void RepeatedImmutablePrimitiveFieldGenerator::
 GenerateParsingCodeFromPacked(io::Printer* printer) const {
   printer->Print(variables_,
     "int length = input.readRawVarint32();\n"
@@ -842,6 +863,20 @@ GenerateParsingCodeFromPacked(io::Printer* printer) const {
     "if (!$get_mutable_bit_parser$ && input.getBytesUntilLimit() > 0) {\n"
     "  $name$_ = $create_list$;\n"
     "  $set_mutable_bit_parser$;\n"
+    "}\n"
+    "while (input.getBytesUntilLimit() > 0) {\n"
+    "  $repeated_add$(input.read$capitalized_type$());\n"
+    "}\n"
+    "input.popLimit(limit);\n");
+}
+
+void RepeatedImmutablePrimitiveFieldGenerator::
+GenerateBuilderParsingCodeFromPacked(io::Printer* printer) const {
+  printer->Print(variables_,
+    "int length = input.readRawVarint32();\n"
+    "int limit = input.pushLimit(length);\n"
+    "if (input.getBytesUntilLimit() > 0) {\n"
+    "  ensure$capitalized_name$IsMutable();\n"
     "}\n"
     "while (input.getBytesUntilLimit() > 0) {\n"
     "  $repeated_add$(input.read$capitalized_type$());\n"

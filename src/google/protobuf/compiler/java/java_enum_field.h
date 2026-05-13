@@ -74,6 +74,7 @@ class ImmutableEnumFieldGenerator : public ImmutableFieldGenerator {
   void GenerateMergingCode(io::Printer* printer) const;
   void GenerateBuildingCode(io::Printer* printer) const;
   void GenerateParsingCode(io::Printer* printer) const;
+  void GenerateBuilderParsingCode(io::Printer* printer) const;
   void GenerateParsingDoneCode(io::Printer* printer) const;
   void GenerateSerializationCode(io::Printer* printer) const;
   void GenerateSerializedSizeCode(io::Printer* printer) const;
@@ -107,6 +108,7 @@ class ImmutableEnumOneofFieldGenerator : public ImmutableEnumFieldGenerator {
   void GenerateMergingCode(io::Printer* printer) const;
   void GenerateBuildingCode(io::Printer* printer) const;
   void GenerateParsingCode(io::Printer* printer) const;
+  void GenerateBuilderParsingCode(io::Printer* printer) const;
   void GenerateSerializationCode(io::Printer* printer) const;
   void GenerateSerializedSizeCode(io::Printer* printer) const;
   void GenerateEqualsCode(io::Printer* printer) const;
@@ -134,7 +136,9 @@ class RepeatedImmutableEnumFieldGenerator : public ImmutableFieldGenerator {
   void GenerateMergingCode(io::Printer* printer) const;
   void GenerateBuildingCode(io::Printer* printer) const;
   void GenerateParsingCode(io::Printer* printer) const;
+  void GenerateBuilderParsingCode(io::Printer* printer) const;
   void GenerateParsingCodeFromPacked(io::Printer* printer) const;
+  void GenerateBuilderParsingCodeFromPacked(io::Printer* printer) const;
   void GenerateParsingDoneCode(io::Printer* printer) const;
   void GenerateSerializationCode(io::Printer* printer) const;
   void GenerateSerializedSizeCode(io::Printer* printer) const;
